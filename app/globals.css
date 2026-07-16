@@ -1,26 +1,420 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+@theme {
+  --font-serif: var(--font-literata), Literata, serif;
+  --font-sans: var(--font-ibm-plex-sans), "IBM Plex Sans", sans-serif;
+
+  --color-chalk: #F4F5F1;
+  --color-ink: #1B211D;
+  --color-cobalt: #2F5D8C;
+  --color-umber: #8A5A2B;
+  --color-moss: #4B7A5D;
+  --color-stone: #D8D6CC;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+/* ─── Base Resets ─────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background-color: var(--color-chalk);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  min-height: 100vh;
+  margin: 0;
+  padding: 0;
+}
+
+::selection {
+  background-color: rgba(47, 93, 140, 0.15);
+  color: var(--color-ink);
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-chalk);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-stone);
+  border-radius: 3px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-cobalt);
+}
+
+/* ─── Animations ──────────────────────────────────────────────────────── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes branchConverge {
+  from { stroke-dashoffset: 20; }
+  to   { stroke-dashoffset: 0; }
+}
+
+.animate-fade-in-up  { animation: fadeInUp 0.3s ease both; }
+.animate-fade-in     { animation: fadeIn 0.2s ease both; }
+.animate-branch-converge {
+  stroke-dasharray: 20;
+  animation: branchConverge 1.5s ease-out infinite;
+}
+
+/* ─── Tiptap Editor Styles ────────────────────────────────────────────── */
+.tiptap-editor {
+  outline: none;
+  min-height: 100%;
+  font-size: 1.05rem;
+  line-height: 1.8;
+  color: var(--color-ink);
+  font-family: var(--font-serif);
+}
+.tiptap-editor p {
+  margin: 0 0 1em;
+}
+.tiptap-editor p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  color: #a09e95;
+  pointer-events: none;
+  float: left;
+  height: 0;
+}
+.tiptap-editor h1 {
+  font-size: 2em;
+  font-weight: 700;
+  margin: 0.8em 0 0.4em;
+  color: var(--color-ink);
+}
+.tiptap-editor h2 {
+  font-size: 1.5em;
+  font-weight: 600;
+  margin: 0.8em 0 0.4em;
+  color: var(--color-ink);
+}
+.tiptap-editor h3 {
+  font-size: 1.25em;
+  font-weight: 600;
+  margin: 0.8em 0 0.4em;
+  color: var(--color-ink);
+}
+.tiptap-editor strong {
+  font-weight: 700;
+}
+.tiptap-editor code {
+  background: rgba(27, 33, 29, 0.05);
+  border: 1px solid var(--color-stone);
+  border-radius: 4px;
+  padding: 0.15em 0.4em;
+  font-size: 0.85em;
+  color: var(--color-umber);
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+.tiptap-editor pre {
+  background: rgba(27, 33, 29, 0.03);
+  border: 1px solid var(--color-stone);
+  border-radius: 6px;
+  padding: 1em;
+  overflow-x: auto;
+  margin: 1em 0;
+}
+.tiptap-editor pre code {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--color-ink);
+}
+.tiptap-editor blockquote {
+  border-left: 3px solid var(--color-cobalt);
+  padding-left: 1em;
+  margin: 1em 0;
+  color: #5c635e;
+  font-style: italic;
+}
+.tiptap-editor ul, .tiptap-editor ol {
+  padding-left: 1.5em;
+  margin: 0.5em 0;
+}
+.tiptap-editor li {
+  margin: 0.3em 0;
+}
+.tiptap-editor hr {
+  border: none;
+  border-top: 1px solid var(--color-stone);
+  margin: 1.5em 0;
+}
+.tiptap-editor a {
+  color: var(--color-cobalt);
+  text-decoration: underline;
+}
+.tiptap-editor a:hover {
+  opacity: 0.8;
+}
+
+/* Collaboration cursor and selection cues */
+.collaboration-cursor__caret {
+  border-left: 2px solid var(--color-cobalt);
+  border-right: 2px solid var(--color-cobalt);
+  word-break: normal;
+  pointer-events: none;
+  margin-left: -1px;
+  margin-right: -1px;
+  position: relative;
+}
+.collaboration-cursor__label {
+  border-radius: 4px;
+  background-color: var(--color-cobalt);
+  color: var(--color-chalk);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  left: -1px;
+  line-height: 1.4;
+  padding: 1px 6px;
+  position: absolute;
+  top: -1.5em;
+  user-select: none;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* ─── Button Base ─────────────────────────────────────────────────────── */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 1rem;
+  border-radius: 6px;
+  font-weight: 500;
+  font-size: 0.825rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  outline: none;
+  border: 1px solid var(--color-stone);
+  background-color: transparent;
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+}
+.btn:focus-visible {
+  box-shadow: 0 0 0 2px var(--color-cobalt);
+}
+
+.btn-primary {
+  background-color: var(--color-cobalt);
+  color: var(--color-chalk);
+  border-color: var(--color-cobalt);
+}
+.btn-primary:hover {
+  opacity: 0.9;
+}
+.btn-primary:active {
+  transform: translateY(0.5px);
+}
+
+.btn-ghost {
+  background-color: transparent;
+  border-color: var(--color-stone);
+  color: var(--color-ink);
+}
+.btn-ghost:hover {
+  background-color: #EDEEE8;
+}
+
+.btn-danger {
+  border-color: #d15858;
+  color: #d15858;
+}
+.btn-danger:hover {
+  background-color: rgba(209, 88, 88, 0.05);
+}
+
+/* ─── Input Base ──────────────────────────────────────────────────────── */
+.input-base {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background-color: var(--color-chalk);
+  border: 1px solid var(--color-stone);
+  border-radius: 6px;
+  color: var(--color-ink);
+  font-size: 0.85rem;
+  transition: border-color 0.15s, box-shadow 0.15s;
+  outline: none;
+  font-family: var(--font-sans);
+}
+.input-base::placeholder {
+  color: #a09e95;
+}
+.input-base:focus {
+  border-color: var(--color-cobalt);
+  box-shadow: 0 0 0 3px rgba(47, 93, 140, 0.15);
+}
+
+/* ─── Card Base ───────────────────────────────────────────────────────── */
+.card {
+  background-color: #EDEEE8;
+  border: 1px solid var(--color-stone);
+  border-radius: 6px;
+  transition: transform 0.15s ease, border-color 0.15s ease;
+}
+.card:hover {
+  border-color: var(--color-cobalt);
+  transform: translateY(-1px);
+}
+
+/* ─── Sidebar / Panels ────────────────────────────────────────────────── */
+.sidebar {
+  background-color: #EDEEE8;
+  border-left: 1px solid var(--color-stone);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.collab-panel {
+  width: 280px;
+  min-height: 100%;
+  background-color: #EDEEE8;
+  border-left: 1px solid var(--color-stone);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.collab-user-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+}
+.collab-user-row:hover {
+  background-color: var(--color-stone);
+}
+
+.collab-avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--color-chalk);
+  flex-shrink: 0;
+}
+
+/* ─── Toolbar ─────────────────────────────────────────────────────────── */
+.toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  color: var(--color-ink);
+  opacity: 0.7;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.toolbar-btn:hover {
+  background-color: var(--color-stone);
+  opacity: 1;
+}
+.toolbar-btn.active {
+  background-color: rgba(47, 93, 140, 0.15);
+  color: var(--color-cobalt);
+  opacity: 1;
+}
+.toolbar-divider {
+  width: 1px;
+  height: 16px;
+  background-color: var(--color-stone);
+  margin: 0 4px;
+}
+
+/* ─── Status Pills ────────────────────────────────────────────────────── */
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  font-family: var(--font-sans);
+}
+.status-synced  { background-color: rgba(75, 122, 93, 0.15); color: #355742; }
+.status-syncing { background-color: rgba(47, 93, 140, 0.15); color: #224366; }
+.status-offline { background-color: rgba(27, 33, 29, 0.1); color: #5c635e; }
+
+/* ─── Presence Avatars ────────────────────────────────────────────────── */
+.avatar {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--color-chalk);
+  border: 2px solid var(--color-chalk);
+  margin-left: -6px;
+  flex-shrink: 0;
+}
+
+/* ─── View Only Badge ─────────────────────────────────────────────────── */
+.view-only-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  background-color: rgba(138, 90, 43, 0.15);
+  color: #613e1d;
+  border: 1px solid rgba(138, 90, 43, 0.2);
+}
+
+/* ─── Role Badges ─────────────────────────────────────────────────────── */
+.collab-role-owner  { background-color: rgba(47, 93, 140, 0.15); color: var(--color-cobalt); }
+.collab-role-editor { background-color: rgba(75, 122, 93, 0.15); color: var(--color-moss); }
+.collab-role-viewer { background-color: rgba(27, 33, 29, 0.1); color: var(--color-ink); opacity: 0.8; }
+
+/* ─── Version Timeline / Revision Spine ───────────────────────────────── */
+.version-item {
+  padding: 10px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: 1px solid transparent;
+  position: relative;
+}
+.version-item:hover {
+  background-color: var(--color-stone);
+}
+.version-item.selected {
+  background-color: rgba(138, 90, 43, 0.1);
+  border-color: var(--color-stone);
+}
+
+/* ─── Loading Spinner ─────────────────────────────────────────────────── */
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--color-stone);
+  border-top-color: var(--color-cobalt);
+  border-radius: 50%;
+  animation: spin-slow 0.8s linear infinite;
 }

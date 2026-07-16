@@ -1,169 +1,179 @@
-# Colab — Local-First Collaborative Document Editor
+# 🚀 Colab — Local-First Collaborative Document Editor
 
-A high-performance, offline-first collaborative document editor built on **Next.js 16**, **Supabase**, **Yjs (CRDT)**, and **Tiptap (ProseMirror)**.
+A high-performance, **offline-first** collaborative text editor built on a modern stack: **Next.js 16**, **Supabase**, **Yjs (CRDT)**, and **Tiptap (ProseMirror)**.
 
----
-
-## Key Features
-
-| Feature | Implementation | Description |
-| :--- | :--- | :--- |
-| **Offline-First Editing** | Yjs + IndexedDB | All keystrokes and updates are written synchronously to the browser's IndexedDB, enabling 100% offline functionality. |
-| **Connection Recovery** | window Event Listeners | Automatic detection of online/offline transitions, triggering immediate queues drain and missed update pulls. |
-| **Dynamic ID Remapping** | Client-side Migrations | Create documents offline using temporary `offline-[uuid]` identifiers, which automatically register on the database and migrate local IndexedDB data once online. |
-| **Real-time Collaboration** | Supabase Realtime | Postgres changes broadcasting ensures all edits propagate instantly between online collaborators. |
-| **Conflict Resolution** | Yjs CRDTs | Commutative and associative CRDT updates resolve conflicts deterministically without requiring merge UIs. |
-| **Safe Version Restore** | Forward-moving Deltas | Restore documents to past snapshots safely by computing forward deltas, preserving complete history. |
-| **Offline Title Editing** | localStorage Queue | Title edits made offline are queued in `collab_pending_titles` and synced on connection recovery. |
-| **Secure Purging** | IndexedDB Cleanups | Logging out purges all cached documents and deletes matching local IndexedDB CRDT stores. |
+Colab is designed to prioritize the user's data under any network condition. It operates with a **local-first** approach: all edits are immediately saved locally to the browser's persistent storage and synced to the cloud seamlessly when a connection is available.
 
 ---
 
-## System Architecture
+## 🌟 Key Features
+
+### 📡 Offline & Connectivity Resilience
+* **Zero-Block Offline Editing:** Create, view, and edit documents completely offline. The editor does not block or wait for network requests.
+* **Auto-Recovery listeners:** Integrates window `online`/`offline` listeners that monitor network status. When the client reconnects, it immediately triggers the offline queue flush and pulls missed server updates.
+* **Intelligent Network Throttling:** Detects when the client is offline and skips futile network requests, immediately routing operations to local queues.
+
+### 🔄 Dynamic ID Remapping for Offline Creation
+* **Temporary Document Shells:** Users can create new documents while offline. The application generates a temporary `offline-[uuid]` client identifier, updates local caches, and redirects the user to the editor canvas immediately.
+* **Automatic Server Registering:** When connection is restored, the application calls the server-side RPC to create a real record, copies local IndexedDB Yjs database states to the real database name, transfers local storage queue states, and seamlessly updates the browser URL without reload.
+
+### 🤝 Conflict-Free Real-Time Collaboration
+* **Commutative Convergence:** Powered by Yjs, document edits are translated into commutative and associative updates. Two or more users can write concurrently, disconnect, reconnect, and converge to the exact same document state without merge UI or data loss.
+* **Real-time broadcast:** Utilizes Supabase Realtime (Postgres changes broadcast) as a communication channel for live collaboration.
+
+### 📜 Forward-Moving Version History
+* **Preserved CRDT Timeline:** Restoring past document snapshots is performed as a forward update. Instead of wiping the database table or history log, the client computes the binary delta between the live state and the target snapshot and inserts it as a new update.
+* **Collaboration Safe:** Forward-restores ensure other collaborators' local databases do not diverge and require no manual reconciliation.
+
+### 🔒 Secure Logout & Session Purging
+* **IndexedDB Purging:** When a user logs out, the application purges local metadata caches and deletes all document-specific IndexedDB databases to ensure absolute privacy and security on shared machines.
+
+---
+
+## 🏗️ Architecture Design
 
 ```mermaid
-graph TD
-    subgraph Browser (Client-Side)
-        A[Tiptap Editor] <--> B(In-Memory Y.Doc)
-        B <-->|Synchronous writes| C[(IndexedDB Store)]
-        B -->|Encodes Deltas| D{Connection Status}
-        D -->|Online| E[Supabase Client]
-        D -->|Offline| F[(localStorage Queue)]
-        F -->|Regained Connection| E
+flowchart TB
+    subgraph Browser [Client-Side Browser Environment]
+        style Browser fill:#f9f9fb,stroke:#d1d5db,stroke-width:2px
+        A[Tiptap Editor] <-->|Bidirectional Bindings| B(In-Memory Y.Doc CRDT)
+        B <-->|Sync Microtask| C[(IndexedDB State Cache)]
+        B -->|Encodes delta| D{Network Status}
+        D -->|Online| E[Supabase JS Client]
+        D -->|Offline| F[(localStorage UpdateQueue)]
+        F -->|Reconnected| E
     end
 
-    subgraph Database (Server-Side)
-        E <-->|Auth / Realtime / REST| G[(Supabase Postgres)]
-        G -->|Applied state updates| H[Documents Table]
-        G -->|Incremental deltas| I[Sync Updates Table]
+    subgraph Server [Supabase Cloud Environment]
+        style Server fill:#f5f3ff,stroke:#c084fc,stroke-width:2px
+        E <-->|Auth & Realtime Channels| G[Supabase Infrastructure]
+        G <--> H[(PostgreSQL Database)]
+        H -->|Base state| J[documents table]
+        H -->|Delta log| K[sync_updates table]
     end
 ```
 
 ---
 
-## How Offline Storage & Sync Works
+## ⚙️ How the Offline Engine Works
 
-Colab utilizes a **dual-storage strategy** to deliver a local-first user experience that protects against network loss:
+Colab splits data persistence into two dedicated layers for absolute data safety:
 
-### 1. IndexedDB: Full CRDT Hydration
-* **Mechanism:** Every edit updates the in-memory Yjs Document (`Y.Doc`). The `y-indexeddb` persistence library handles saving the updated document binary state to a database named `collab-doc-[docId]`.
-* **Reliability:** This write is synchronous in the same microtask as the keystroke. Even if the browser window is closed or crashes, the local state is preserved and restored instantly when the page loads again.
+### 1. The Local State Layer (IndexedDB)
+* **What it stores:** The entire merged document state.
+* **How it writes:** Powered by `y-indexeddb`, every keystroke updates the local CRDT model, which writes the binary state representation into the browser's IndexedDB database named `collab-doc-[docId]` in the same microtask.
+* **Why it matters:** Even if the computer loses power or the tab is closed, the user's latest keystroke is saved locally and loads immediately upon reopening the browser.
 
-### 2. localStorage: Outgoing Change Queue
-* **Mechanism:** Outgoing updates are handled by a custom `UpdateQueue`. When the client is offline, binary updates are encoded in base64 and pushed to `localStorage` under the key `collab_queue_[docId]`.
-* **Recovery:** When the browser regains connectivity, the window `online` listener is triggered, causing the sync provider to sequentially push the queued updates to Supabase's `sync_updates` table.
+### 2. The Transport Layer (localStorage Queue)
+* **What it stores:** Outgoing incremental updates (deltas) that need to be sent to other collaborators.
+* **How it writes:** If the sync provider detects that the client is offline, it queues the base64-encoded update in `localStorage` under `collab_queue_[docId]`.
+* **Draining:** On network reconnection, the queue drains sequentially, pushing each delta back to Supabase's `sync_updates` table.
 
-### 3. Offline Document Creation (ID Remapping)
-To support creating documents offline, Colab implements a client-side database remapping strategy:
-1. **Creation:** Clicking "New Document" while offline generates a local client-side UUID prefix (`offline-[uuid]`).
-2. **Buffering:** The temporary metadata is stored in `collab_cached_documents`, and the creation task is appended to `collab_pending_creations`.
-3. **Redirection:** The client router navigates to `/editor/offline-[uuid]`, letting the user write immediately.
-4. **Resolution:** When the connection is restored:
-   * The client calls the Supabase `create_document` RPC to provision a real record and receive a database-generated ID (`realId`).
-   * The client clones the temporary IndexedDB database contents into a new database named `collab-doc-[realId]`.
-   * The client moves the local storage update queue to the new ID, renames the cache record, and silently switches the browser URL using `window.history.replaceState`.
-   * Finally, it drains the queue to push all accumulated edits to the server.
+> [!TIP]
+> **Performance Optimization:** Because incremental Yjs updates are typically tiny (<1KB), using localStorage for the queue is extremely fast and light. The large, full document states are stored in IndexedDB, which has much larger storage limits.
 
 ---
 
-## Conflict Resolution
-
-This editor uses **Yjs** - a Commutative Replicated Data Type (CRDT) library.
-
-* **Deterministic Ordering:** All insert and delete operations are represented as commutative, associative graphs. The final state merges to the exact same text on all clients, regardless of the order in which updates are received.
-* **No Merge Conflicts:** There is no "last write wins" or manual diff-merge prompt. Concurrent updates from different users are interleaved automatically and safely.
-
----
-
-## Safe Version Restore
-
-Restoring a document to a previous snapshot is implemented as a **Forward-moving Delta** rather than a database overwrite:
-1. **Load Snapshot:** Retrieve the target snapshot binary from `document_versions`.
-2. **Compute Delta:** Compute the binary diff between the current live Yjs document state and the target snapshot.
-3. **Apply Delta:** Apply and push the diff as a new `sync_update`.
-4. **Result:** Collaborators' documents automatically transition to the restored content, while the full history timeline remains intact.
-
----
-
-## Directory Structure
+## 🛠️ Detailed Code Structure
 
 ```
 collab-editor/
-├── __tests__/            # Jest unit tests (Yjs CRDT merge & sync queue behavior)
-├── app/                  # Next.js App Router
-│   ├── (auth)/           # Login and Register pages
-│   ├── api/              # Backend route APIs
-│   ├── dashboard/        # Client-side documents dashboard
-│   ├── editor/           # Client-side text editor canvas
-│   └── globals.css       # Core styling & styling system
-├── components/           # Reusable React components
-│   ├── auth/             # Login/Register forms and Logout button
-│   ├── dashboard/        # New Document controls
-│   ├── editor/           # Toolbar, collaborator status, and versions
-│   └── PWARegistration.jsx # Client-side Service Worker registration
-├── e2e/                  # Playwright E2E integration tests
-├── hooks/                # Custom React Hooks (sync status, presence, document loaders)
-├── lib/
-│   ├── supabase/         # Supabase Client and Server initializers
-│   ├── sync/             # SupabaseSyncProvider, UpdateQueue, and offline remapper
-│   └── versions/         # Timeline version snapshot captures
-├── public/               # Static assets, sw.js, and manifest.json
-└── playwright.config.js  # Playwright E2E configuration
+├── __tests__/             # Unit tests (CRDT merging & offline serialization)
+│   ├── crdt.test.js       # Yjs convergence unit tests
+│   └── syncQueue.test.js  # localStorage UpdateQueue tests
+├── app/                   # Next.js App Router (Client Component Shells)
+│   ├── (auth)/            # Login & Register views
+│   ├── api/               # API route handlers (auth callback, version restore)
+│   ├── dashboard/         # Dashboard with local caching & sync trigger
+│   ├── editor/            # Editor canvas loader & ID remapper
+│   ├── favicon_io/        # Source logo assets
+│   ├── globals.css        # Tailwind directives and CSS variables
+│   ├── layout.jsx         # Root layout with PWARegistration injected
+│   └── page.jsx           # Redirect controller to dashboard
+├── components/            # Interface components
+│   ├── auth/              # LoginForm, RegisterForm, and LogoutButton cache purge
+│   ├── dashboard/         # NewDocumentButton with offline temporary ID generation
+│   ├── editor/            # Toolbar, presence, and version timeline drawers
+│   └── PWARegistration.jsx # Dynamically registers sw.js
+├── e2e/                   # Integration and End-to-End tests
+│   ├── auth.setup.js      # Logs in & caches auth states for Playwright
+│   ├── global-setup.js    # Seeds the database with E2E test records
+│   └── offline-sync.spec.js # Simulates network dropouts and sync validations
+├── hooks/                 # Reusable React hooks
+│   ├── useDocument.js     # Loads metadata from cache & queues offline title changes
+│   ├── usePresence.js     # Broadcasts cursor locations via Realtime channels
+│   └── useSyncStatus.js   # Tracks sync status pill states
+├── lib/                   # Database & synchronization providers
+│   ├── supabase/          # Supabase client/server initializers
+│   ├── sync/              # SupabaseSyncProvider & offlineSync utilities
+│   └── versions/          # Timeline version capture utils
+├── public/                # Publicly served static files
+│   ├── favicon_io/        # Public logo assets served at /favicon_io/*
+│   ├── manifest.json      # PWA manifest
+│   └── sw.js              # Network-First page shell & Static cache-first SW
+└── playwright.config.js   # Playwright configuration
 ```
 
 ---
 
-## Setup Guide
+## 🚦 Getting Started
 
-### 1. Clone & Install
+### 📋 Prerequisites
+* Node.js v20 or higher
+* npm v10 or higher
+* A Supabase project
+
+### 1. Project Installation
+Clone the repository and install the dependencies:
 ```bash
 git clone https://github.com/your-username/colab-editor.git
-cd colab-editor
+cd collab-editor
 npm install --legacy-peer-deps
 ```
 
-### 2. Configure Database & Migrations
-1. Create a project at [supabase.com](https://supabase.com).
-2. Run the database migrations in the SQL editor in order:
-   * `supabase/migrations/001_initial_schema.sql`
-   * `supabase/migrations/002_rls_policies.sql`
-   * `supabase/migrations/003_functions.sql`
-3. Turn on **Realtime** replication on the `sync_updates` table in your Supabase Dashboard settings.
-4. Set the Site URL in authentication settings to `http://localhost:3000`.
+### 2. Configure Your Database
+Run the following SQL migration scripts in order inside your Supabase SQL Editor:
+1. `supabase/migrations/001_initial_schema.sql` (Tables & indexes setup)
+2. `supabase/migrations/002_rls_policies.sql` (Row-Level Security)
+3. `supabase/migrations/003_functions.sql` (Collaborator invites, document creation & merges)
 
-### 3. Add Environment Variables
-Create a `.env.local` or edit `.env` in the root:
+> [!IMPORTANT]
+> **Enable Realtime:** You must enable Realtime replication on the `sync_updates` table via your Supabase Database Replication settings to allow live collaboration to broadcast.
+
+### 3. Setup Environment Variables
+Create a file named `.env.local` in the root directory:
 ```env
 NEXT_PUBLIC_SUPABASE_URL=https://your-project.supabase.co
-NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
-OPENAI_API_KEY=your-openai-api-key
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-public-key
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-secret-key
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 ```
 
-### 4. Run Development Server
+### 4. Run Locally
+Start the development server:
 ```bash
 npm run dev
 ```
+Open [http://localhost:3000](http://localhost:3000) in your browser.
 
 ---
 
-## Running Tests
+## 🧪 Testing Guide
 
-### Unit Tests (Jest)
-Verify Yjs merge convergence and queue serialization:
+Colab features comprehensive Jest unit tests and Playwright E2E suites to guarantee offline sync behaves correctly:
+
+### Unit Tests
+Tests Yjs CRDT document merge convergence and UpdateQueue base64 serialization:
 ```bash
 npm test
 ```
 
-### E2E Tests (Playwright)
-Verify network connection state throttling and offline synchronization:
+### Integration & E2E Tests
+Tests user registrations, dashboard caches, offline typing, connection dropouts, re-syncs, and multi-user cursor merges:
 ```bash
-# Installs Chromium headless shell
+# 1. Install chromium binaries
 npx playwright install chromium
 
-# Runs tests (automatically spins up global database seed & logins)
+# 2. Run E2E tests (auto-runs database setups and browser sessions)
 npx playwright test
 ```
-#   H O E _ C o l l a b  
- 
