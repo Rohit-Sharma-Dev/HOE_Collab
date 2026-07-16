@@ -6,17 +6,37 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "jest"
   },
   "dependencies": {
+    "@ai-sdk/openai": "^4.0.13",
+    "@supabase/ssr": "^0.12.1",
+    "@supabase/supabase-js": "^2.110.4",
+    "@tiptap/extension-character-count": "^3.27.4",
+    "@tiptap/extension-collaboration": "^3.27.4",
+    "@tiptap/extension-placeholder": "^3.27.4",
+    "@tiptap/pm": "^3.27.4",
+    "@tiptap/react": "^3.27.4",
+    "@tiptap/starter-kit": "^3.27.4",
+    "@tiptap/y-tiptap": "^3.0.6",
+    "ai": "^7.0.26",
     "next": "16.2.10",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "uuid": "^14.0.1",
+    "y-indexeddb": "^9.0.12",
+    "y-protocols": "^1.0.7",
+    "yjs": "^13.6.31"
   },
   "devDependencies": {
+    "@jest/globals": "^30.4.1",
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",
+    "jest": "^30.4.2",
+    "jest-environment-node": "^30.4.1",
     "tailwindcss": "^4"
   }
 }
